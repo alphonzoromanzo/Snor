@@ -1,6 +1,6 @@
 # Triagem de Ronco (pt-PT)
 
-Aplicação web **totalmente estática** para triagem inicial de sintomas relacionados com ronco e possível apneia do sono.
+Aplicação web **100% estática** para triagem inicial de sintomas relacionados com ronco e possível apneia do sono.
 
 > **Aviso importante:** esta ferramenta faz triagem e **não** faz diagnóstico. Não substitui avaliação médica.
 
@@ -14,56 +14,59 @@ Aplicação web **totalmente estática** para triagem inicial de sintomas relaci
 - `assets/`
 - `.nojekyll`
 
-## Como executar localmente
+## Garantias de compatibilidade com GitHub Pages
 
-Como usa módulos ES em JavaScript, execute através de um servidor HTTP local (não abrir diretamente como `file://`).
+- Sem backend, sem base de dados, sem APIs, sem autenticação.
+- Sem SSR, sem bundlers e sem ferramenta de build.
+- Apenas ficheiros estáticos (`HTML`, `CSS`, `JavaScript` vanilla).
+- Todos os caminhos são **relativos** (ex.: `./app.js`, `./styles.css`, `./data/questions.js`), por isso funciona tanto em `/` como em `/docs/`.
 
-Exemplos:
+## Executar localmente
+
+Como usa módulos ES em JavaScript, execute com um servidor HTTP simples (não abrir como `file://`).
 
 ```bash
 python3 -m http.server 8080
 ```
 
-Depois abrir no navegador:
+Abrir no navegador:
 
 - `http://localhost:8080/`
 
-## Publicar no GitHub Pages
+## Publicar no GitHub Pages (instruções exatas)
 
-A aplicação usa apenas caminhos relativos, por isso funciona em:
+### Opção A — Publicar a partir da root (`/`)
 
-1. **Root do repositório** (`/`), ou
-2. **Pasta `/docs`**.
-
-### Opção A: publicar a partir da root
-
-1. Faça commit e push dos ficheiros para o branch pretendido (ex.: `main`).
-2. No GitHub, abrir **Settings → Pages**.
-3. Em **Build and deployment**, escolher:
+1. Confirmar que `index.html` está na raiz do repositório.
+2. Confirmar que `.nojekyll` existe na raiz.
+3. Fazer commit e push para o branch alvo (ex.: `main`).
+4. No GitHub: **Settings → Pages**.
+5. Em **Build and deployment**:
    - **Source:** `Deploy from a branch`
    - **Branch:** `main`
    - **Folder:** `/ (root)`
-4. Guardar e aguardar a publicação.
+6. Clicar **Save** e aguardar o URL final do Pages.
 
-### Opção B: publicar a partir de `/docs`
+### Opção B — Publicar a partir de `docs/`
 
-1. Copiar os ficheiros da app para a pasta `docs/`.
-2. Garantir que `docs/.nojekyll` existe.
+1. Criar a pasta `docs/` (se ainda não existir).
+2. Copiar para `docs/` estes ficheiros/pastas:
+   - `index.html`
+   - `styles.css`
+   - `app.js`
+https://github.com/alphonzoromanzo/Snor/pull/3/conflict?name=README.md&ancestor_oid=490cf28bfe18e27d40129c10b502fc4faa8ee74c&base_oid=67b2c02107154bfe79cd22c1689678a4357a2f2e&head_oid=6db027d2fdc5b2664331b2f8117fb962dc1b689d   - `data/`
+   - `logic/`
+   - `assets/`
+   - `.nojekyll` (ficheiro vazio dentro de `docs/`)
 3. Fazer commit e push.
-4. Em **Settings → Pages**, escolher:
+4. No GitHub: **Settings → Pages**.
+5. Em **Build and deployment**:
    - **Source:** `Deploy from a branch`
    - **Branch:** `main`
    - **Folder:** `/docs`
-5. Guardar e aguardar a publicação.
+6. Clicar **Save** e aguardar o URL final do Pages.
 
-## Notas clínicas e de segurança
+## Segurança clínica
 
-- A classificação em **verde / amarelo / laranja / vermelho** representa prioridade de triagem, não diagnóstico definitivo.
-- O relatório final indica:
-  - categoria,
-  - significado clínico,
-  - áreas críticas identificadas,
-  - ações recomendadas,
-  - o que evitar,
-  - próximo passo/especialidade provável.
-- Em caso de agravamento súbito, sinais neurológicos, dor torácica ou risco de acidente por sonolência, procurar avaliação urgente.
+- A classificação em **verde / amarelo / laranja / vermelho** representa prioridade de triagem e não diagnóstico definitivo.
+- Em caso de agravamento súbito, dor torácica, sinais neurológicos ou risco de acidente por sonolência, procurar avaliação urgente.
