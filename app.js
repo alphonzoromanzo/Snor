@@ -1,8 +1,11 @@
-import { questions } from "./data/questions.js";
-import { classifyTriage } from "./logic/classifier.js";
+import { questions as questionsData } from "./data/questions.js";
+import { buildResult, classify, computeDerived } from "./logic/classifier.js";
+
+const allQuestions = questionsData.questions;
 
 const state = {
   answers: {},
+  visibleQuestions: [],
   currentIndex: 0,
 };
 
@@ -16,164 +19,71 @@ const elements = {
   progressPercent: document.getElementById("progress-percent"),
   progressFill: document.getElementById("progress-fill"),
   report: document.getElementById("report"),
+  progressWrapper: document.getElementById("progress-wrapper"),
 };
 
-function checkCondition(rule) {
-  const answer = state.answers[rule.question];
+function evaluateRule(rule) {
+  if (!rule) return true;
 
-  if (Object.hasOwn(rule, "equals")) {
-    return answer === rule.equals;
+  if (Array.isArray(rule)) {
+    return rule.reduce((acc, condition, index) => {
+      const isMatch = evaluateRule(condition);
+      if (index === 0) return isMatch;
+      return condition.joiner === "or" ? acc || isMatch : acc && isMatch;
+    }, true);
   }
 
-  if (Object.hasOwn(rule, "includes")) {
-    return Array.isArray(answer) && answer.includes(rule.includes);
+  if (rule.all) return rule.all.every(evaluateRule);
+  if (rule.any) return rule.any.some(evaluateRule);
+
+  if (rule.variable) {
+    const answer = state.answers[rule.variable];
+
+    if (rule.operator === "equals" || Object.hasOwn(rule, "equals")) {
+      const expected = Object.hasOwn(rule, "value") ? rule.value : rule.equals;
+      return answer === expected;
+    }
+
+    if (rule.operator === "not_equals") {
+      return answer !== rule.value;
+    }
+
+    if (rule.operator === "in" && Array.isArray(rule.value)) {
+      return rule.value.includes(answer);
+    }
+
+    if (rule.operator === "includes") {
+      return Array.isArray(answer) && answer.includes(rule.value);
+    }
   }
-
-  return false;
-}
-
-function evaluateShowIf(showIf) {
-  if (!showIf) return true;
-
-  if (showIf.all) return showIf.all.every(checkCondition);
-  if (showIf.any) return showIf.any.some(checkCondition);
 
   return true;
 }
 
-function getVisibleQuestions() {
-  return questions.filter((q) => evaluateShowIf(q.show_if));
-}
+function recomputeVisibleQuestions() {
+  const currentQuestion = state.visibleQuestions[state.currentIndex];
+  state.visibleQuestions = allQuestions.filter((question) => evaluateRule(question.show_if));
 
-function clampCurrentIndex() {
-  const visible = getVisibleQuestions();
-  if (!visible.length) {
+  if (!state.visibleQuestions.length) {
     state.currentIndex = 0;
     return;
   }
-  if (state.currentIndex > visible.length - 1) {
-    state.currentIndex = visible.length - 1;
-  }
-}
 
-function renderQuestion() {
-  clampCurrentIndex();
-  const visible = getVisibleQuestions();
-  const question = visible[state.currentIndex];
-
-  elements.validation.textContent = "";
-  elements.report.classList.add("hidden");
-
-  if (!question) return;
-
-  elements.container.innerHTML = buildQuestionMarkup(question);
-  hydrateInput(question);
-  updateProgress();
-  elements.backBtn.disabled = state.currentIndex === 0;
-  elements.nextBtn.textContent = state.currentIndex === visible.length - 1 ? "Ver resultado" : "Seguinte";
-}
-
-function buildQuestionMarkup(question) {
-  if (question.type === "single") {
-    const selected = state.answers[question.id];
-    const options = question.options
-      .map(
-        (option) => `
-        <label class="option">
-          <input type="radio" name="${question.id}" value="${option.value}" ${selected === option.value ? "checked" : ""} />
-          <span>${option.label}</span>
-        </label>`
-      )
-      .join("");
-
-    return `<fieldset class="question">
-      <legend>${question.label}</legend>
-      <div class="options">${options}</div>
-    </fieldset>`;
-  }
-
-  if (question.type === "multi") {
-    const selected = state.answers[question.id] || [];
-    const options = question.options
-      .map(
-        (option) => `
-        <label class="option">
-          <input type="checkbox" name="${question.id}" value="${option.value}" ${selected.includes(option.value) ? "checked" : ""} />
-          <span>${option.label}</span>
-        </label>`
-      )
-      .join("");
-
-    return `<fieldset class="question">
-      <legend>${question.label}</legend>
-      <div class="options">${options}</div>
-    </fieldset>`;
-  }
-
-  const value = state.answers[question.id] ?? "";
-  return `<div class="question">
-    <label class="question-label" for="${question.id}">${question.label}</label>
-    ${question.help ? `<p class="help">${question.help}</p>` : ""}
-    <input id="${question.id}" name="${question.id}" type="number" min="${question.min ?? ""}" max="${question.max ?? ""}" step="${question.step ?? "1"}" value="${value}" />
-  </div>`;
-}
-
-function hydrateInput(question) {
-  const inputs = elements.container.querySelectorAll("input");
-
-  inputs.forEach((input) => {
-    input.addEventListener("change", () => {
-      persistAnswer(question);
-      if (question.id === "day_sleepiness" || question.id === "bmi_known") {
-        clampCurrentIndex();
-        renderQuestion();
-      }
-    });
-  });
-}
-
-function persistAnswer(question) {
-  if (question.type === "single") {
-    const checked = elements.container.querySelector(`input[name="${question.id}"]:checked`);
-    state.answers[question.id] = checked ? checked.value : undefined;
-    return;
-  }
-
-  if (question.type === "multi") {
-    const checked = [...elements.container.querySelectorAll(`input[name="${question.id}"]:checked`)].map((i) => i.value);
-    if (checked.includes("none") && checked.length > 1) {
-      state.answers[question.id] = checked.filter((v) => v !== "none");
-    } else {
-      state.answers[question.id] = checked;
+  if (currentQuestion) {
+    const sameIndex = state.visibleQuestions.findIndex((item) => item.id === currentQuestion.id);
+    if (sameIndex !== -1) {
+      state.currentIndex = sameIndex;
+      return;
     }
-    return;
   }
 
-  const input = elements.container.querySelector(`#${question.id}`);
-  state.answers[question.id] = input.value;
-}
-
-function validateAnswer(question) {
-  persistAnswer(question);
-  const value = state.answers[question.id];
-
-  if (question.type === "number") {
-    const numericValue = Number(value);
-    if (!value || !Number.isFinite(numericValue)) return "Indique um valor válido.";
-    if (question.min !== undefined && numericValue < question.min) return `Valor mínimo: ${question.min}.`;
-    if (question.max !== undefined && numericValue > question.max) return `Valor máximo: ${question.max}.`;
-    return "";
+  if (state.currentIndex > state.visibleQuestions.length - 1) {
+    state.currentIndex = state.visibleQuestions.length - 1;
   }
-
-  if (question.type === "single" && !value) return "Selecione uma opção para continuar.";
-  if (question.type === "multi" && (!Array.isArray(value) || !value.length)) return "Selecione pelo menos uma opção.";
-
-  return "";
 }
 
 function updateProgress() {
-  const visible = getVisibleQuestions();
-  const total = visible.length || 1;
+  const total = state.visibleQuestions.length || 1;
   const current = Math.min(state.currentIndex + 1, total);
   const percent = Math.round((current / total) * 100);
 
@@ -182,108 +92,148 @@ function updateProgress() {
   elements.progressFill.style.width = `${percent}%`;
 }
 
-function reportToText(report) {
-  const critical = report.criticalAreas.map((item) => `- ${item}`).join("\n");
-  const doNow = report.doNow.map((item) => `- ${item}`).join("\n");
-  const avoid = report.avoid.map((item) => `- ${item}`).join("\n");
+function renderQuestion() {
+  recomputeVisibleQuestions();
 
-  return [
-    "Triagem de Ronco - Resumo",
-    "",
-    report.title,
-    "",
-    "O que significa:",
-    report.meaning,
-    "",
-    "Áreas críticas identificadas:",
-    critical,
-    "",
-    "O que fazer agora:",
-    doNow,
-    "",
-    "O que evitar:",
-    avoid,
-    "",
-    `Próximo passo provável: ${report.specialist}`,
-    "",
-    "Nota: Esta ferramenta faz triagem e não substitui avaliação médica.",
-  ].join("\n");
-}
+  const question = state.visibleQuestions[state.currentIndex];
+  elements.validation.textContent = "";
 
-async function copySummary(text) {
-  try {
-    await navigator.clipboard.writeText(text);
-    alert("Resumo copiado para a área de transferência.");
-  } catch {
-    alert("Não foi possível copiar automaticamente. Utilize o botão de descarregar.");
+  if (!question) {
+    showResult();
+    return;
   }
-}
 
-function downloadSummary(text) {
-  const blob = new Blob([text], { type: "text/plain;charset=utf-8" });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement("a");
-  a.href = url;
-  a.download = "resumo-triagem-ronco.txt";
-  document.body.appendChild(a);
-  a.click();
-  a.remove();
-  URL.revokeObjectURL(url);
-}
-
-function renderReport() {
-  const result = classifyTriage(state.answers);
-  const summaryText = reportToText(result);
-
-  elements.form.classList.add("hidden");
-  elements.report.classList.remove("hidden");
-  elements.report.innerHTML = `
-    <span class="result-badge result-${result.category}">${result.category.toUpperCase()}</span>
-    <h2>${result.title}</h2>
-
-    <div class="report-section">
-      <h3>O que este resultado significa</h3>
-      <p>${result.meaning}</p>
-    </div>
-
-    <div class="report-section">
-      <h3>Áreas críticas identificadas</h3>
-      <ul>${result.criticalAreas.map((item) => `<li>${item}</li>`).join("")}</ul>
-    </div>
-
-    <div class="report-section">
-      <h3>O que deve fazer agora</h3>
-      <ul>${result.doNow.map((item) => `<li>${item}</li>`).join("")}</ul>
-    </div>
-
-    <div class="report-section">
-      <h3>O que deve evitar</h3>
-      <ul>${result.avoid.map((item) => `<li>${item}</li>`).join("")}</ul>
-    </div>
-
-    <div class="report-section">
-      <h3>Especialista / próximo passo provável</h3>
-      <p>${result.specialist}</p>
-    </div>
-
-    <div class="report-actions">
-      <button type="button" id="copy-btn" class="btn btn-secondary">Copiar resumo</button>
-      <button type="button" id="download-btn" class="btn btn-secondary">Descarregar resumo (.txt)</button>
-      <button type="button" id="restart-btn" class="btn btn-primary">Reiniciar triagem</button>
-    </div>
-  `;
-
-  document.getElementById("copy-btn").addEventListener("click", () => copySummary(summaryText));
-  document.getElementById("download-btn").addEventListener("click", () => downloadSummary(summaryText));
-  document.getElementById("restart-btn").addEventListener("click", restart);
-}
-
-function restart() {
-  state.answers = {};
-  state.currentIndex = 0;
   elements.form.classList.remove("hidden");
   elements.report.classList.add("hidden");
-  renderQuestion();
+  elements.progressWrapper.classList.remove("hidden");
+
+  elements.container.innerHTML = `
+    <fieldset class="question" aria-labelledby="q-${question.id}">
+      <legend id="q-${question.id}">${question.question_pt}</legend>
+      <div class="options">
+        ${question.options
+          .map((option) => {
+            const checked = state.answers[question.variable] === option.value ? "checked" : "";
+            const inputId = `${question.id}-${option.value}`;
+            return `
+              <label class="option" for="${inputId}">
+                <input id="${inputId}" type="radio" name="${question.variable}" value="${option.value}" ${checked} />
+                <span>${option.label}</span>
+              </label>
+            `;
+          })
+          .join("")}
+      </div>
+    </fieldset>
+  `;
+
+  elements.container.querySelectorAll(`input[name="${question.variable}"]`).forEach((input) => {
+    input.addEventListener("change", () => {
+      state.answers[question.variable] = input.value;
+      recomputeVisibleQuestions();
+      updateProgress();
+    });
+  });
+
+  elements.backBtn.disabled = state.currentIndex === 0;
+  elements.nextBtn.textContent =
+    state.currentIndex === state.visibleQuestions.length - 1 ? "Ver resultado" : "Seguinte";
+
+  updateProgress();
+}
+
+function validateCurrentQuestion() {
+  const question = state.visibleQuestions[state.currentIndex];
+  if (!question) return true;
+
+  const value = state.answers[question.variable];
+  if (!value) {
+    elements.validation.textContent = "Selecione uma opção para continuar.";
+    return false;
+  }
+
+  elements.validation.textContent = "";
+  return true;
+}
+
+function summaryText(result) {
+  const blocks = [
+    `Resultado: ${result.title}`,
+    `Nível: ${result.level.toUpperCase()}`,
+    "",
+    `O que significa: ${result.meaning}`,
+    "",
+    "Áreas críticas:",
+    ...(result.criticalAreas.length ? result.criticalAreas.map((item) => `- ${item}`) : ["- Nenhuma área crítica identificada."]),
+    "",
+    "O que fazer agora:",
+    ...result.doNow.map((item) => `- ${item}`),
+    "",
+    "O que evitar:",
+    ...result.avoid.map((item) => `- ${item}`),
+    "",
+    "Próximo passo clínico provável:",
+    ...result.specialistHint.map((item) => `- ${item}`),
+  ];
+
+  return blocks.join("\n");
+}
+
+function renderList(title, items) {
+  const content = items.length ? items : ["Sem pontos adicionais."];
+  return `
+    <section class="report-section">
+      <h3>${title}</h3>
+      <ul>
+        ${content.map((item) => `<li>${item}</li>`).join("")}
+      </ul>
+    </section>
+  `;
+}
+
+function showResult() {
+  elements.form.classList.add("hidden");
+  elements.progressWrapper.classList.add("hidden");
+
+  const derived = computeDerived(state.answers);
+  const level = classify(state.answers, derived);
+  const result = buildResult(level, state.answers, derived);
+
+  elements.report.className = `report result-${level}`;
+  elements.report.innerHTML = `
+    <h2>${result.title}</h2>
+    <p>${result.meaning}</p>
+    ${renderList("Áreas críticas identificadas", result.criticalAreas)}
+    ${renderList("O que fazer agora", result.doNow)}
+    ${renderList("O que evitar", result.avoid)}
+    ${renderList("Próximo passo clínico provável", result.specialistHint)}
+    <div class="report-actions">
+      <button type="button" id="copy-btn" class="btn btn-secondary">Copiar resumo</button>
+      <button type="button" id="restart-btn" class="btn btn-primary">Recomeçar</button>
+    </div>
+    <p id="copy-status" class="copy-status" aria-live="polite"></p>
+  `;
+  elements.report.classList.remove("hidden");
+
+  const copyButton = document.getElementById("copy-btn");
+  const restartButton = document.getElementById("restart-btn");
+  const copyStatus = document.getElementById("copy-status");
+
+  copyButton.addEventListener("click", async () => {
+    try {
+      await navigator.clipboard.writeText(summaryText(result));
+      copyStatus.textContent = "Resumo copiado para a área de transferência.";
+    } catch {
+      copyStatus.textContent = "Não foi possível copiar automaticamente. Tente novamente.";
+    }
+  });
+
+  restartButton.addEventListener("click", () => {
+    state.answers = {};
+    state.currentIndex = 0;
+    state.visibleQuestions = [];
+    renderQuestion();
+  });
 }
 
 elements.backBtn.addEventListener("click", () => {
@@ -294,20 +244,15 @@ elements.backBtn.addEventListener("click", () => {
 });
 
 elements.nextBtn.addEventListener("click", () => {
-  const visible = getVisibleQuestions();
-  const question = visible[state.currentIndex];
-  if (!question) return;
+  if (!validateCurrentQuestion()) return;
 
-  const validationMessage = validateAnswer(question);
-  elements.validation.textContent = validationMessage;
-  if (validationMessage) return;
-
-  if (state.currentIndex >= visible.length - 1) {
-    renderReport();
-  } else {
-    state.currentIndex += 1;
-    renderQuestion();
+  if (state.currentIndex >= state.visibleQuestions.length - 1) {
+    showResult();
+    return;
   }
+
+  state.currentIndex += 1;
+  renderQuestion();
 });
 
 renderQuestion();
