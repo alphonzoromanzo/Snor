@@ -1,142 +1,204 @@
-const REPORT_CONTENT = {
-  green: {
-    title: "Resultado Verde · risco baixo na triagem atual",
-    meaning:
-      "Os dados recolhidos não mostram sinais fortes de alarme neste momento. Ainda assim, o ronco pode ter impacto no descanso e deve ser reavaliado se piorar.",
-    doNow: [
-      "Adotar medidas de higiene do sono (horários regulares, evitar deitar muito tarde).",
-      "Controlar peso, consumo de álcool noturno e posição de dormir.",
-      "Vigiar sintomas nas próximas semanas e repetir triagem se surgirem novos sinais.",
-    ],
-    avoid: [
-      "Ignorar agravamento progressivo do ronco ou cansaço diurno.",
-      "Assumir que ausência de sintomas graves exclui totalmente doença do sono.",
-    ],
-    specialist: "Acompanhamento inicial com médico de família, se necessário.",
-  },
-  yellow: {
-    title: "Resultado Amarelo · risco intermédio",
-    meaning:
-      "Existe suspeita moderada de distúrbio respiratório do sono. Não é um cenário de emergência, mas justifica avaliação médica programada.",
-    doNow: [
-      "Marcar consulta com médico de família nas próximas semanas.",
-      "Levar registo de sintomas: frequência do ronco, pausas respiratórias observadas e sonolência diurna.",
-      "Reforçar medidas de estilo de vida e segurança na condução quando cansado.",
-    ],
-    avoid: [
-      "Adiar avaliação por vários meses perante sintomas persistentes.",
-      "Conduzir quando existir sonolência relevante.",
-    ],
-    specialist:
-      "Médico de família e possível referenciação para consulta de sono/otorrinolaringologia.",
-  },
-  orange: {
-    title: "Resultado Laranja · risco elevado",
-    meaning:
-      "Há sinais consistentes com risco elevado de apneia obstrutiva do sono ou complicações associadas. É importante acelerar avaliação clínica.",
-    doNow: [
-      "Contactar médico de família com prioridade (idealmente em poucos dias).",
-      "Considerar avaliação em consulta de sono, pneumologia ou otorrinolaringologia.",
-      "Se houver sonolência diurna, reduzir atividades de risco (condução, máquinas).",
-    ],
-    avoid: [
-      "Minimizar episódios de pausas respiratórias observadas por terceiros.",
-      "Uso de álcool/sedativos noturnos sem orientação clínica.",
-    ],
-    specialist:
-      "Consulta prioritária de medicina do sono (pneumologia/ORL) após triagem médica inicial.",
-  },
-  red: {
-    title: "Resultado Vermelho · sinais de alerta",
-    meaning:
-      "Foram identificados sinais potencialmente graves. Esta triagem não substitui observação médica urgente.",
-    doNow: [
-      "Procurar avaliação médica urgente (SNS 24, urgência ou 112 conforme gravidade).",
-      "Não conduzir nem realizar tarefas perigosas até orientação clínica.",
-      "Levar este resumo para apoiar a avaliação inicial.",
-    ],
-    avoid: [
-      "Esperar por consulta de rotina perante sinais neurológicos, dor torácica ou episódios de quase-acidente por sonolência.",
-      "Autoajustar medicação sedativa sem falar com profissional de saúde.",
-    ],
-    specialist:
-      "Via urgente; após estabilização, avaliação dirigida (sono, cardiologia, neurologia ou ORL).",
-  },
-};
-
-function hasRedFlag(answer) {
-  if (!Array.isArray(answer)) return false;
-  return answer.some((item) => item !== "none");
+function isYes(value) {
+  return value === "yes";
 }
 
-function computeDerived(answers) {
-  const bmi = Number(answers.bmi_value);
-  const obesity = Number.isFinite(bmi) && bmi >= 30;
+function countTrue(flags) {
+  return flags.filter(Boolean).length;
+}
 
-  const heavySnoring = ["most_nights", "every_night"].includes(answers.snore_frequency);
-  const severeSleepiness = answers.day_sleepiness === "severe";
-  const moderateSleepiness = ["moderate", "severe"].includes(answers.day_sleepiness);
-  const apneasObserved = answers.witnessed_apneas === "yes";
-  const nightChoking = answers.choking_night === "frequent";
-  const drivingRisk = ["near_miss", "yes"].includes(answers.driving_sleepiness);
-  const hardHypertension = answers.hypertension === "uncontrolled";
+export function computeDerived(answers) {
+  const major_red_flag =
+    answers.observed_breathing_pauses === "yes" ||
+    answers.waking_gasping_or_choking === "two_plus" ||
+    answers.dangerous_sleepiness === "yes_driving_or_risk" ||
+    (answers.snoring_with_silent_pauses === "yes" && answers.excessive_daytime_sleepiness === "yes");
+
+  const current_nasal_component =
+    answers.nasal_blockage_at_bedtime === "yes" ||
+    answers.morning_nasal_blockage === "yes" ||
+    answers.mouth_breathing_at_night === "yes";
+
+  const recurrent_non_cold_nasal_pattern =
+    answers.nasal_issue_only_with_colds === "also_outside_colds" ||
+    answers.allergic_or_rhinitis_pattern === "yes" ||
+    answers.diagnosed_allergic_rhinitis === "yes";
+
+  const clinical_burden_count = countTrue([
+    isYes(answers.excessive_daytime_sleepiness),
+    isYes(answers.non_restorative_sleep),
+    isYes(answers.morning_headaches),
+    isYes(answers.daytime_cognitive_impact),
+    isYes(answers.known_hypertension),
+    isYes(answers.dry_mouth_on_waking),
+    isYes(answers.snoring_worsening_recently),
+    isYes(answers.functional_daytime_impact),
+    isYes(answers.activity_limited_by_sleepiness),
+  ]);
+
+  const modifiable_factor_count = countTrue([
+    isYes(answers.regular_supine_sleep),
+    isYes(answers.alcohol_before_sleep),
+    isYes(answers.sedative_use_before_sleep),
+    isYes(answers.current_smoker),
+    isYes(answers.sleep_deprivation_pattern),
+    isYes(answers.weight_gain_5kg_plus),
+    current_nasal_component,
+  ]);
+
+  const simple_measures_failed =
+    (answers.recent_side_sleep_trial === "yes" && answers.side_sleep_effect === "no_improvement") ||
+    (answers.recent_alcohol_reduction_trial === "yes" && answers.alcohol_reduction_effect === "no_improvement") ||
+    (answers.recent_nasal_support_trial === "yes" && answers.nasal_support_effect === "no_improvement") ||
+    (answers.recent_nasal_treatment_used === "yes" && answers.nasal_treatment_effect === "no_improvement");
+
+  const strong_ent_pattern =
+    answers.known_upper_airway_anatomical_issue === "yes" &&
+    current_nasal_component &&
+    recurrent_non_cold_nasal_pattern;
+
+  const snoring_core_pattern = answers.frequent_snoring === "yes" && answers.loud_snoring === "yes";
 
   return {
-    obesity,
-    heavySnoring,
-    severeSleepiness,
-    moderateSleepiness,
-    apneasObserved,
-    nightChoking,
-    drivingRisk,
-    hardHypertension,
-    redFlagSymptoms: hasRedFlag(answers.urgent_red_flags),
+    major_red_flag,
+    current_nasal_component,
+    recurrent_non_cold_nasal_pattern,
+    clinical_burden_count,
+    modifiable_factor_count,
+    simple_measures_failed,
+    strong_ent_pattern,
+    snoring_core_pattern,
   };
 }
 
-function determineCategory(d) {
-  if (d.redFlagSymptoms || d.drivingRisk) return "red";
+export function classify(answers, derived) {
+  const isRed =
+    answers.observed_breathing_pauses === "yes" ||
+    answers.waking_gasping_or_choking === "two_plus" ||
+    answers.dangerous_sleepiness === "yes_driving_or_risk" ||
+    (answers.snoring_with_silent_pauses === "yes" && answers.excessive_daytime_sleepiness === "yes") ||
+    (answers.loud_snoring === "yes" &&
+      answers.excessive_daytime_sleepiness === "yes" &&
+      answers.known_hypertension === "yes") ||
+    derived.major_red_flag === true;
 
-  const orangeScore = [d.apneasObserved, d.nightChoking, d.severeSleepiness, d.hardHypertension, d.obesity, d.heavySnoring].filter(Boolean).length;
-  if (orangeScore >= 3 || (d.apneasObserved && d.severeSleepiness)) return "orange";
+  if (isRed) return "red";
 
-  const yellowScore = [d.heavySnoring, d.moderateSleepiness, d.apneasObserved, d.obesity].filter(Boolean).length;
-  if (yellowScore >= 2) return "yellow";
+  const isOrange =
+    derived.clinical_burden_count >= 3 ||
+    answers.functional_daytime_impact === "yes" ||
+    answers.snoring_worsening_recently === "yes" ||
+    derived.strong_ent_pattern === true ||
+    derived.simple_measures_failed === true ||
+    (answers.frequent_snoring === "yes" &&
+      answers.loud_snoring === "yes" &&
+      answers.non_restorative_sleep === "yes");
+
+  if (isOrange) return "orange";
+
+  const isYellow =
+    derived.modifiable_factor_count >= 2 ||
+    (answers.snoring_worse_supine === "yes" && derived.clinical_burden_count < 3) ||
+    (derived.current_nasal_component === true && derived.major_red_flag === false);
+
+  if (isYellow) return "yellow";
 
   return "green";
 }
 
-function buildCriticalAreas(answers, d) {
-  const areas = [];
+const RESULT_CONTENT = {
+  green: {
+    title: "Provável ressonar simples",
+    meaning:
+      "Não surgem sinais fortes de alarme neste momento. O padrão parece de menor gravidade clínica.",
+    doNow: [
+      "Dormir de lado na maioria das noites",
+      "Regularizar horas de sono",
+      "Observar se o problema piora",
+    ],
+    avoid: [
+      "Ignorar agravamento progressivo",
+      "Usar sedativos para tentar resolver o ressonar",
+    ],
+    specialistHint: [
+      "Sem necessidade imediata de consulta, salvo agravamento ou novos sinais de alarme.",
+    ],
+  },
+  yellow: {
+    title: "Ressonar provavelmente agravado por hábitos, posição ou nariz",
+    meaning: "Foram identificados fatores modificáveis que podem estar a agravar o ressonar.",
+    doNow: [
+      "Dormir de lado em pelo menos 5 noites por semana",
+      "Evitar álcool nas 4 horas antes de dormir",
+      "Melhorar a respiração nasal se houver obstrução",
+      "Reavaliar após 2 semanas",
+    ],
+    avoid: [
+      "Comprar dispositivos caros demasiado cedo",
+      "Assumir que melhoria parcial resolve tudo",
+    ],
+    specialistHint: [
+      "Se não melhorar após 2 semanas, considerar consulta médica.",
+      "Se houver componente nasal persistente, considerar ORL.",
+    ],
+  },
+  orange: {
+    title: "Ressonar com necessidade de avaliação médica",
+    meaning:
+      "Há sinais suficientes para justificar consulta médica. O problema pode ir além de ressonar simples.",
+    doNow: [
+      "Marcar consulta médica",
+      "Manter medidas conservadoras enquanto aguarda",
+      "Levar resumo dos sintomas",
+    ],
+    avoid: ["Adiar avaliação durante meses", "Depender apenas de apps ou gadgets"],
+    specialistHint: [
+      "Médico de família.",
+      "ORL se o padrão nasal ou anatómico for forte.",
+      "Medicina do sono se houver suspeita crescente de apneia do sono.",
+    ],
+  },
+  red: {
+    title: "Suspeita relevante de apneia do sono",
+    meaning:
+      "Foram identificados sinais de alarme compatíveis com maior risco clínico.",
+    doNow: [
+      "Marcar consulta médica com prioridade",
+      "Evitar álcool antes de dormir",
+      "Evitar sedativos sem orientação médica",
+      "Dormir de lado enquanto aguarda avaliação",
+      "Se tem sonolência ao volante, evitar condução em condições inseguras",
+    ],
+    avoid: [
+      "Tratar isto como simples incómodo social",
+      "Assumir que soluções caseiras chegam",
+    ],
+    specialistHint: [
+      "Médico de família.",
+      "Medicina do sono.",
+      "ORL se houver sintomas nasais persistentes ou suspeita anatómica importante.",
+    ],
+  },
+};
 
-  if (d.redFlagSymptoms) areas.push("Sinais de alerta clínico recente.");
-  if (d.drivingRisk) areas.push("Risco de segurança por sonolência em condução/tarefas de risco.");
-  if (d.apneasObserved) areas.push("Pausas respiratórias observadas durante o sono.");
-  if (d.nightChoking) areas.push("Despertares com sensação de sufoco frequentes.");
-  if (d.moderateSleepiness) areas.push("Sonolência diurna clinicamente relevante.");
-  if (d.hardHypertension) areas.push("Hipertensão difícil de controlar.");
-  if (d.obesity) areas.push("IMC elevado, fator associado a risco respiratório do sono.");
-  if (answers.alcohol_sedatives_night === "frequent") {
-    areas.push("Uso frequente de álcool/sedativos à noite, potencial agravante.");
-  }
+export function buildResult(level, answers, derived) {
+  const criticalAreas = [];
 
-  if (!areas.length) {
-    areas.push("Sem áreas críticas de alto risco identificadas nesta triagem.");
-  }
+  if (derived.major_red_flag) criticalAreas.push("Sinais de alarme respiratórios ou de sonolência");
+  if (derived.current_nasal_component) criticalAreas.push("Componente nasal ou respiração pela boca");
+  if (derived.strong_ent_pattern) criticalAreas.push("Possível componente anatómica ORL");
+  if (derived.modifiable_factor_count >= 2) criticalAreas.push("Fatores agravantes modificáveis");
+  if (derived.clinical_burden_count >= 3) criticalAreas.push("Carga sintomática clínica relevante");
+  if (answers.functional_daytime_impact === "yes") criticalAreas.push("Impacto funcional durante o dia");
 
-  return areas;
-}
-
-export function classifyTriage(answers) {
-  const derived = computeDerived(answers);
-  const category = determineCategory(derived);
-  const content = REPORT_CONTENT[category];
-  const criticalAreas = buildCriticalAreas(answers, derived);
+  const content = RESULT_CONTENT[level] ?? RESULT_CONTENT.green;
 
   return {
-    category,
-    ...content,
+    level,
+    title: content.title,
+    meaning: content.meaning,
     criticalAreas,
-    derived,
+    doNow: content.doNow,
+    avoid: content.avoid,
+    specialistHint: content.specialistHint,
   };
 }
