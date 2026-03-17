@@ -54,7 +54,7 @@ Abrir no navegador:
    - `index.html`
    - `styles.css`
    - `app.js`
-   - `data/`
+https://github.com/alphonzoromanzo/Snor/pull/3/conflict?name=README.md&ancestor_oid=490cf28bfe18e27d40129c10b502fc4faa8ee74c&base_oid=67b2c02107154bfe79cd22c1689678a4357a2f2e&head_oid=6db027d2fdc5b2664331b2f8117fb962dc1b689d   - `data/`
    - `logic/`
    - `assets/`
    - `.nojekyll` (ficheiro vazio dentro de `docs/`)
