@@ -1,0 +1,43 @@
+<!doctype html>
+<html lang="pt-PT">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Triagem de Ronco</title>
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body>
+    <main class="container">
+      <header class="app-header">
+        <h1>Triagem de Ronco</h1>
+        <p class="disclaimer">Esta ferramenta faz triagem e não substitui avaliação médica.</p>
+      </header>
+
+      <section class="card" aria-live="polite">
+        <div id="progress-wrapper" class="progress-wrapper" role="status" aria-label="Progresso do questionário">
+          <div class="progress-meta">
+            <span id="progress-text">Pergunta 1 de 1</span>
+            <span id="progress-percent">0%</span>
+          </div>
+          <div class="progress-bar" aria-hidden="true">
+            <div id="progress-fill" class="progress-fill"></div>
+          </div>
+        </div>
+
+        <form id="wizard-form" novalidate>
+          <div id="question-container"></div>
+          <p id="validation-message" class="validation-message" role="alert"></p>
+
+          <div class="actions">
+            <button type="button" id="back-btn" class="btn btn-secondary">Anterior</button>
+            <button type="button" id="next-btn" class="btn btn-primary">Seguinte</button>
+          </div>
+        </form>
+
+        <section id="report" class="report hidden" aria-live="polite"></section>
+      </section>
+    </main>
+
+    <script type="module" src="./app.js"></script>
+  </body>
+</html>
